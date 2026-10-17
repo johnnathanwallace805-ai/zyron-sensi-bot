@@ -449,8 +449,8 @@ async def ajuda(ctx):
         "`.v` — verifica a latência do bot\n"
         "`.s` — informações do servidor\n"
         "`.u` — informações do seu perfil\n"
-        "`.p` — publica o painel de tickets (administradores)\n\n"
-        "**Moderação**\n"
+        "`.p` — publica o painel de tickets (administradores)\n"
+        "`.termos` — publica os termos de uso (administradores)\n\n"
         "`.limpar 10` — apaga até 10 mensagens (administradores)\n"
         "`.fechar` — fecha o ticket atual, se você tiver autorização",
         discord.Color.blurple(),
