@@ -1,1 +1,30 @@
-ZYRON SENSI BOT.
+ZYRON SENSI BOT
+
+Bot para Discord do projeto ZYRON SENSI.
+
+Recursos
+
+* Sistema de tickets para suporte.
+* Organização do atendimento.
+* Recursos de configuração para o servidor.
+
+Requisitos
+
+* Python 3.10 ou superior.
+* Token de um bot criado no Discord Developer Portal.
+
+Instalação
+
+1. Instale as dependências:
+    pip install -r requirements.txt
+2. Configure o token do bot conforme as instruções do projeto.
+3. Execute:
+    python bot.py
+
+Segurança
+
+Nunca compartilhe o token do bot ou publique credenciais privadas.
+
+⸻
+
+ZYRON SENSI — Projeto em desenvolvimento.
