@@ -535,29 +535,69 @@ async def usuario(ctx, membro: discord.Member = None):
     await ctx.send(embed=embed)
 
 
-# =====================================================
-# .termos - TERMOS DE USO (ADMINISTRADORES)
+
+# .termos - TERMOS DE COMPRA E USO (ADMINISTRADORES)
 # =====================================================
 
 @bot.command(name="termos")
 @commands.guild_only()
 @commands.has_guild_permissions(manage_guild=True)
 async def termos(ctx):
-    embed = embed_base(
-        "📄 TERMOS DE USO | ZYRON SENSI",
-        "Ao utilizar os serviços da Zyron Sensi, você concorda com as seguintes condições:\n\n"
-        "**1. Uso dos serviços:** utilize os produtos e serviços conforme as orientações da equipe.\n"
-        "**2. Compras:** confira as informações do produto antes de concluir uma compra.\n"
-        "**3. Suporte:** dúvidas e problemas devem ser encaminhados por ticket usando `.p`.\n"
-        "**4. Conduta:** fraudes, abusos ou tentativas de prejudicar o servidor não são permitidos.\n"
-        "**5. Atualizações:** estes termos podem ser atualizados quando necessário.\n\n"
-        "Em caso de dúvidas, entre em contato com a equipe.",
-        discord.Color.gold(),
+    descricao = (
+        "📌 **Leia com atenção antes de comprar ou utilizar os serviços da Zyron Sensi.**\n\n"
+
+        "**1. Compras e confirmação**\n"
+        "Confira a descrição, os requisitos, a compatibilidade e o preço antes de pagar. "
+        "Se tiver dúvidas, pergunte à equipe antes de concluir a compra.\n\n"
+
+        "**2. Pagamento e entrega**\n"
+        "A entrega seguirá o método e o prazo informados pela equipe. "
+        "O cliente deve fornecer corretamente as informações necessárias. "
+        "Nunca compartilhe senhas ou dados sensíveis desnecessários.\n\n"
+
+        "**3. Responsabilidade do cliente**\n"
+        "O cliente deve proteger os acessos recebidos e seguir as instruções fornecidas. "
+        "Verifique os requisitos do produto antes de utilizá-lo.\n\n"
+
+        "**4. Uso permitido**\n"
+        "Não são permitidos golpes, fraudes, ameaças, abusos, tentativas de invasão, "
+        "atividades ilegais ou ações que prejudiquem o servidor, a equipe ou outros clientes.\n\n"
+
+        "**5. Suporte**\n"
+        "Para dúvidas, problemas com compras ou entrega, entre no canal de suporte "
+        "e clique no botão **🎫 Abrir suporte**. Explique o problema com clareza "
+        "e evite compartilhar informações pessoais ou dados sensíveis.\n\n"
+
+        "**6. Problemas e reembolsos**\n"
+        "Se houver problemas com pagamento ou entrega, entre em contato com a equipe "
+        "pelo suporte para análise. A solução será avaliada conforme as condições "
+        "informadas na compra e a legislação aplicável.\n\n"
+
+        "**7. Abusos e suspensão**\n"
+        "Fraudes, abusos ou violações destes termos poderão resultar em restrições "
+        "de acesso, considerando as circunstâncias e a segurança da comunidade.\n\n"
+
+        "**8. Atualizações**\n"
+        "Estes termos podem ser atualizados. A versão publicada neste canal será "
+        "a referência vigente.\n\n"
+
+        "Ao comprar ou utilizar os serviços, você declara que leu e compreendeu "
+        "estas condições. Em caso de dúvidas, fale com a equipe antes de comprar.\n\n"
+
+        "*Estes termos não anulam os direitos garantidos pela legislação aplicável.*"
     )
 
-    await ctx.send(embed=embed)
+    embed = discord.Embed(
+        title="📄 TERMOS DE COMPRA E USO | ZYRON SENSI",
+        description=descricao,
+        color=discord.Color.gold(),
+    )
 
+    embed.set_footer(
+        text="ZYRON SENSI • Leia os termos antes de comprar"
+    )
 
+    await ctx.send(embed)
 # =====================================================
 # .limpar - MODERAÇÃO
 # =====================================================
