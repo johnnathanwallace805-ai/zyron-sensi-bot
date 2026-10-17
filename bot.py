@@ -2,17 +2,14 @@
 import os
 import discord
 from discord.ext import commands
-from datetime import datetime, timezone
-
-# =========================
-# CONFIGURAÇÃO
-# =========================
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 SUPPORT_ROLE_ID = int(os.getenv("SUPPORT_ROLE_ID", "0"))
 TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID", "0"))
 
+# Criar os intents ANTES de configurá-los
+intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
@@ -21,6 +18,7 @@ bot = commands.Bot(
     intents=intents,
     help_command=None
 )
+
 
 
 # =========================
