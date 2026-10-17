@@ -1,222 +1,450 @@
+
 import os
 import discord
-from discord import app_commands
 from discord.ext import commands
+from datetime import datetime, timezone
+
+# =========================
+# CONFIGURAÇÃO
+# =========================
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = os.getenv("GUILD_ID", "").strip()
-SUPPORT_ROLE_ID = os.getenv("SUPPORT_ROLE_ID", "").strip()
+GUILD_ID = int(os.getenv("GUILD_ID", "0"))
+SUPPORT_ROLE_ID = int(os.getenv("SUPPORT_ROLE_ID", "0"))
+TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID", "0"))
 
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix=".", intents=intents)
+intents.message_content = True
+intents.members = True
+
+bot = commands.Bot(
+    command_prefix=".",
+    intents=intents,
+    help_command=None
+)
 
 
-def support_role(guild: discord.Guild):
-    if SUPPORT_ROLE_ID.isdigit():
-        return guild.get_role(int(SUPPORT_ROLE_ID))
-    return None
+# =========================
+# EMBEDS
+# =========================
+
+def embed_base(titulo, descricao, cor=discord.Color.blurple()):
+    return discord.Embed(
+        title=titulo,
+        description=descricao,
+        color=cor,
+        timestamp=datetime.now(timezone.utc)
+    )
 
 
-class TicketPanel(discord.ui.View):
+# =========================
+# PAINEL DE TICKETS
+# =========================
+
+class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(
         label="Abrir ticket",
-        style=discord.ButtonStyle.secondary,
         emoji="🎫",
-        custom_id="zyron:open_ticket",
+        style=discord.ButtonStyle.green,
+        custom_id="zyron:abrir_ticket"
     )
-    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def abrir_ticket(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
         guild = interaction.guild
+
         if guild is None:
             await interaction.response.send_message(
-                "Use este botão dentro do servidor.", ephemeral=True
+                "Este botão só funciona dentro de um servidor.",
+                ephemeral=True
             )
             return
 
-        channel_name = f"ticket-{interaction.user.id}"
-        existing = discord.utils.get(guild.text_channels, name=channel_name)
-        if existing:
+        existente = discord.utils.get(
+            guild.text_channels,
+            name=f"ticket-{interaction.user.id}"
+        )
+
+        if existente:
             await interaction.response.send_message(
-                f"Você já tem um ticket aberto: {existing.mention}", ephemeral=True
+                f"Você já tem um ticket aberto: {existente.mention}",
+                ephemeral=True
             )
             return
 
-        category = discord.utils.get(guild.categories, name="🎫・TICKETS")
+        categoria = guild.get_channel(TICKET_CATEGORY_ID) if TICKET_CATEGORY_ID else None
+        cargo_suporte = guild.get_role(SUPPORT_ROLE_ID) if SUPPORT_ROLE_ID else None
+
+        permissoes = {
+            guild.default_role: discord.PermissionOverwrite(
+                view_channel=False
+            ),
+            interaction.user: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                attach_files=True
+            ),
+            guild.me: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                manage_channels=True
+            )
+        }
+
+        if cargo_suporte:
+            permissoes[cargo_suporte] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            )
+
         try:
-            if category is None:
-                category = await guild.create_category("🎫・TICKETS")
-
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                interaction.user: discord.PermissionOverwrite(
-                    view_channel=True, send_messages=True, read_message_history=True
-                ),
-            }
-            bot_member = guild.me
-            if bot_member:
-                overwrites[bot_member] = discord.PermissionOverwrite(
-                    view_channel=True, send_messages=True, read_message_history=True,
-                    manage_channels=True
-                )
-
-            role = support_role(guild)
-            if role:
-                overwrites[role] = discord.PermissionOverwrite(
-                    view_channel=True, send_messages=True, read_message_history=True
-                )
-
-            channel = await guild.create_text_channel(
-                name=channel_name,
-                category=category,
-                overwrites=overwrites,
-                topic=f"Ticket aberto por {interaction.user} ({interaction.user.id})",
+            canal = await guild.create_text_channel(
+                name=f"ticket-{interaction.user.id}",
+                category=categoria if isinstance(
+                    categoria, discord.CategoryChannel
+                ) else None,
+                overwrites=permissoes,
+                topic=f"Ticket de {interaction.user} | ID: {interaction.user.id}"
             )
-            await channel.send(
-                f"{interaction.user.mention} seu ticket foi aberto!\n"
-                "Explique aqui como podemos ajudar. A equipe responderá assim que possível.",
-                view=CloseTicketView(),
+
+            view = FecharTicketView()
+
+            await canal.send(
+                f"Olá {interaction.user.mention}! 👋\n"
+                "Explique seu problema e aguarde a equipe de suporte.",
+                view=view
             )
+
             await interaction.response.send_message(
-                f"Ticket criado: {channel.mention}", ephemeral=True
+                f"Ticket criado: {canal.mention}",
+                ephemeral=True
             )
+
         except discord.Forbidden:
-            message = (
-                "Não consegui criar o ticket. Confira se o bot tem as permissões "
-                "**Gerenciar canais**, **Ver canais** e **Enviar mensagens**."
+            await interaction.response.send_message(
+                "Não tenho permissão para criar tickets. "
+                "Verifique as permissões do bot.",
+                ephemeral=True
             )
-            if interaction.response.is_done():
-                await interaction.followup.send(message, ephemeral=True)
-            else:
-                await interaction.response.send_message(message, ephemeral=True)
 
 
-class CloseTicketView(discord.ui.View):
+class FecharTicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(
         label="Fechar ticket",
-        style=discord.ButtonStyle.danger,
         emoji="🔒",
-        custom_id="zyron:close_ticket",
+        style=discord.ButtonStyle.red,
+        custom_id="zyron:fechar_ticket"
     )
-    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        channel = interaction.channel
+    async def fechar_ticket(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        canal = interaction.channel
         guild = interaction.guild
-        if not isinstance(channel, discord.TextChannel) or guild is None:
-            await interaction.response.send_message("Este botão só funciona em um ticket.", ephemeral=True)
-            return
 
-        is_owner = channel.name == f"ticket-{interaction.user.id}"
-        role = support_role(guild)
-        is_support = role is not None and role in interaction.user.roles
-        has_manage_channels = interaction.user.guild_permissions.manage_channels
-        if not (is_owner or is_support or has_manage_channels):
+        if not isinstance(canal, discord.TextChannel) or guild is None:
             await interaction.response.send_message(
-                "Somente quem abriu o ticket ou a equipe pode fechá-lo.", ephemeral=True
+                "Não foi possível fechar este ticket.",
+                ephemeral=True
             )
             return
 
-        await interaction.response.send_message("Ticket será fechado em 3 segundos.")
-        await discord.utils.sleep_until(discord.utils.utcnow() + __import__("datetime").timedelta(seconds=3))
+        cargo = guild.get_role(SUPPORT_ROLE_ID) if SUPPORT_ROLE_ID else None
+        dono_id = None
+
+        if canal.topic and "ID:" in canal.topic:
+            try:
+                dono_id = int(canal.topic.split("ID:")[-1].strip())
+            except ValueError:
+                dono_id = None
+
+        eh_dono = interaction.user.id == dono_id
+        eh_suporte = cargo is not None and cargo in interaction.user.roles
+        eh_admin = interaction.user.guild_permissions.manage_channels
+
+        if not (eh_dono or eh_suporte or eh_admin):
+            await interaction.response.send_message(
+                "Somente o dono do ticket, a equipe de suporte "
+                "ou um administrador pode fechá-lo.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            "🔒 Ticket será fechado em 5 segundos."
+        )
+
+        import asyncio
+        await asyncio.sleep(5)
+
         try:
-            await channel.delete(reason=f"Ticket fechado por {interaction.user}")
+            await canal.delete(reason=f"Ticket fechado por {interaction.user}")
         except discord.Forbidden:
             pass
 
 
-@bot.event
-async def setup_hook():
-    bot.add_view(TicketPanel())
-    bot.add_view(CloseTicketView())
-
+# =========================
+# EVENTOS
+# =========================
 
 @bot.event
 async def on_ready():
+    bot.add_view(TicketView())
+    bot.add_view(FecharTicketView())
+
+    print(f"ZYRON SENSI conectado como {bot.user}")
+    print(f"Prefixo dos comandos: .")
+
+
+# =========================
+# .p - PAINEL
+# =========================
+
+@bot.command(name="p")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def painel(ctx):
+    embed = embed_base(
+        "🎫 ZYRON SENSI | SUPORTE",
+        "Precisa de ajuda? Clique no botão abaixo para abrir um ticket.\n\n"
+        "• Atendimento individual\n"
+        "• Suporte da equipe\n"
+        "• Um ticket por usuário"
+    )
+    await ctx.send(embed=embed, view=TicketView())
+
+
+# =========================
+# .r - REGRAS
+# =========================
+
+@bot.command(name="r")
+@commands.guild_only()
+async def regras(ctx):
+    embed = embed_base(
+        "📜 REGRAS DO SERVIDOR",
+        "**1.** Respeite todos os membros.\n"
+        "**2.** Não faça spam ou flood.\n"
+        "**3.** Não divulgue links sem autorização.\n"
+        "**4.** Não abuse dos canais de suporte.\n"
+        "**5.** Siga as orientações da equipe.\n\n"
+        "O descumprimento pode resultar em punições.",
+        discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .c - CATÁLOGO
+# =========================
+
+@bot.command(name="c")
+@commands.guild_only()
+async def catalogo(ctx):
+    embed = embed_base(
+        "🛒 CATÁLOGO ZYRON SENSI",
+        "Confira os produtos e serviços disponíveis.\n\n"
+        "📦 **Produtos:** consulte a equipe.\n"
+        "💬 **Dúvidas ou compras:** abra um ticket com `.p`.\n\n"
+        "Consulte a equipe para obter informações atualizadas."
+    )
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .h - AJUDA
+# =========================
+
+@bot.command(name="h")
+async def ajuda(ctx):
+    embed = embed_base(
+        "📚 COMANDOS | ZYRON SENSI",
+        "**Comandos gerais**\n"
+        "`.h` — mostra esta lista\n"
+        "`.r` — exibe as regras\n"
+        "`.c` — abre o catálogo\n"
+        "`.v` — verifica a latência do bot\n"
+        "`.s` — informações do servidor\n"
+        "`.u` — informações do seu perfil\n"
+        "`.p` — publica o painel de tickets (administradores)\n\n"
+        "**Moderação**\n"
+        "`.limpar 10` — apaga até 10 mensagens (administradores)\n"
+        "`.fechar` — fecha o ticket atual, se você tiver autorização",
+        discord.Color.blurple()
+    )
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .v - LATÊNCIA
+# =========================
+
+@bot.command(name="v")
+async def latencia(ctx):
+    ms = round(bot.latency * 1000)
+    embed = embed_base(
+        "🏓 PONG!",
+        f"Latência do bot: **{ms} ms**",
+        discord.Color.green()
+    )
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .s - SERVIDOR
+# =========================
+
+@bot.command(name="s")
+@commands.guild_only()
+async def servidor(ctx):
+    guild = ctx.guild
+    embed = embed_base(
+        f"🏠 {guild.name}",
+        f"**Membros:** {guild.member_count}\n"
+        f"**Canais:** {len(guild.channels)}\n"
+        f"**Cargos:** {len(guild.roles)}\n"
+        f"**Criado em:** {guild.created_at.strftime('%d/%m/%Y')}"
+    )
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .u - PERFIL
+# =========================
+
+@bot.command(name="u")
+@commands.guild_only()
+async def usuario(ctx, membro: discord.Member = None):
+    membro = membro or ctx.author
+
+    embed = embed_base(
+        f"👤 Perfil de {membro.display_name}",
+        f"**Usuário:** {membro.mention}\n"
+        f"**ID:** `{membro.id}`\n"
+        f"**Conta criada:** {membro.created_at.strftime('%d/%m/%Y')}\n"
+        f"**Entrou no servidor:** "
+        f"{membro.joined_at.strftime('%d/%m/%Y') if membro.joined_at else 'Não disponível'}"
+    )
+
+    embed.set_thumbnail(url=membro.display_avatar.url)
+    await ctx.send(embed=embed)
+
+
+# =========================
+# .limpar - MODERAÇÃO
+# =========================
+
+@bot.command(name="limpar")
+@commands.guild_only()
+@commands.has_permissions(manage_messages=True)
+async def limpar(ctx, quantidade: int):
+    if quantidade < 1 or quantidade > 100:
+        await ctx.send("Escolha uma quantidade entre 1 e 100.")
+        return
+
+    apagadas = await ctx.channel.purge(
+        limit=quantidade + 1
+    )
+
+    aviso = await ctx.send(
+        f"🧹 {len(apagadas) - 1} mensagens apagadas."
+    )
+
+    import asyncio
+    await asyncio.sleep(4)
+
     try:
-        if GUILD_ID.isdigit():
-            guild = discord.Object(id=int(GUILD_ID))
-            bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
-            print(f"Comandos sincronizados no servidor {GUILD_ID}.")
-        else:
-            await bot.tree.sync()
-            print("Comandos globais sincronizados; podem demorar para aparecer.")
-    except Exception as exc:
-        print(f"Erro ao sincronizar comandos: {exc}")
-    print(f"Conectado como {bot.user}.")
-
-
-@bot.tree.command(name="painel", description="Publica o painel de suporte da ZYRON SENSI.")
-@app_commands.checks.has_permissions(manage_channels=True)
-async def painel(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🐺 ZYRON SENSI • SUPORTE",
-        description=(
-            "Precisa de ajuda com seu pedido ou com os packs de sensibilidade?\n\n"
-            "Clique em **Abrir ticket** para criar um canal privado com a equipe."
-        ),
-        color=discord.Color.from_rgb(225, 225, 225),
-    )
-    embed.set_footer(text="ZYRON SENSI • Atendimento")
-    await interaction.response.send_message(embed=embed, view=TicketPanel())
-
-
-@bot.tree.command(name="regras", description="Publica as regras básicas da ZYRON SENSI.")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def regras(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="📜 REGRAS • ZYRON SENSI",
-        description=(
-            "1. Respeite todos os membros.\n"
-            "2. Não faça spam nem divulgue links sem autorização.\n"
-            "3. Confira as informações dos packs antes de comprar.\n"
-            "4. Use os canais corretos para dúvidas e suporte.\n"
-            "5. Não compartilhe dados pessoais ou informações de pagamento no chat público."
-        ),
-        color=discord.Color.from_rgb(225, 225, 225),
-    )
-    await interaction.response.send_message(embed=embed)
-
-
-@bot.tree.command(name="catalogo", description="Publica o catálogo demonstrativo de packs.")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def catalogo(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="⚙️ CATÁLOGO • ZYRON SENSI",
-        description=(
-            "**START** — R$ 4,90\nPack básico de sensibilidade.\n\n"
-            "**PRO** — R$ 9,90\nPack intermediário de sensibilidade.\n\n"
-            "**ELITE** — R$ 14,90\nPack avançado de sensibilidade.\n\n"
-            "*Preços demonstrativos: edite antes de divulgar. "
-            "Este protótipo não entrega packs nem processa pagamentos automaticamente.*"
-        ),
-        color=discord.Color.from_rgb(225, 225, 225),
-    )
-    await interaction.response.send_message(embed=embed)
-
-
-@bot.tree.error
-async def on_app_command_error(
-    interaction: discord.Interaction, error: app_commands.AppCommandError
-):
-    if isinstance(error, app_commands.MissingPermissions):
-        message = "Você precisa ter a permissão necessária para usar este comando."
-    else:
-        message = "Não foi possível executar esse comando. Tente novamente ou confira os logs do bot."
-        print(f"Erro no comando: {error}")
-    try:
-        if interaction.response.is_done():
-            await interaction.followup.send(message, ephemeral=True)
-        else:
-            await interaction.response.send_message(message, ephemeral=True)
-    except discord.HTTPException:
+        await aviso.delete()
+    except discord.NotFound:
         pass
 
 
+# =========================
+# .fechar - FECHAR TICKET
+# =========================
+
+@bot.command(name="fechar")
+@commands.guild_only()
+async def fechar(ctx):
+    canal = ctx.channel
+
+    if not isinstance(canal, discord.TextChannel):
+        return
+
+    if not canal.name.startswith("ticket-"):
+        await ctx.send("Este comando só pode ser usado em um canal de ticket.")
+        return
+
+    dono_id = None
+    if canal.topic and "ID:" in canal.topic:
+        try:
+            dono_id = int(canal.topic.split("ID:")[-1].strip())
+        except ValueError:
+            dono_id = None
+
+    cargo = ctx.guild.get_role(SUPPORT_ROLE_ID) if SUPPORT_ROLE_ID else None
+    eh_suporte = cargo is not None and cargo in ctx.author.roles
+    eh_admin = ctx.author.guild_permissions.manage_channels
+
+    if ctx.author.id != dono_id and not eh_suporte and not eh_admin:
+        await ctx.send("Você não tem permissão para fechar este ticket.")
+        return
+
+    await ctx.send("🔒 Fechando ticket em 5 segundos...")
+
+    import asyncio
+    await asyncio.sleep(5)
+
+    try:
+        await canal.delete(reason=f"Ticket fechado por {ctx.author}")
+    except discord.Forbidden:
+        await ctx.send("Não tenho permissão para excluir este canal.")
+
+
+# =========================
+# TRATAMENTO DE ERROS
+# =========================
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send("Comando não encontrado. Use `.h` para ver os comandos.")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send("Você não tem permissão para usar esse comando.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("Falta um argumento. Consulte `.h`.")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send("Argumento inválido. Confira o comando e tente novamente.")
+    elif isinstance(error, commands.NoPrivateMessage):
+        await ctx.send("Este comando só funciona dentro de um servidor.")
+    else:
+        print(f"Erro no comando: {error}")
+        await ctx.send("Ocorreu um erro ao executar o comando.")
+
+
+# =========================
+# INICIAR BOT
+# =========================
+
 if not TOKEN:
-    raise RuntimeError("Defina DISCORD_TOKEN nas variáveis de ambiente da hospedagem.")
+    raise RuntimeError(
+        "A variável de ambiente DISCORD_TOKEN não foi configurada."
+    )
 
 bot.run(TOKEN)
