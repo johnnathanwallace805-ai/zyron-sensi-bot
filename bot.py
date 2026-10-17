@@ -536,6 +536,29 @@ async def usuario(ctx, membro: discord.Member = None):
 
 
 # =====================================================
+# .termos - TERMOS DE USO (ADMINISTRADORES)
+# =====================================================
+
+@bot.command(name="termos")
+@commands.guild_only()
+@commands.has_guild_permissions(manage_guild=True)
+async def termos(ctx):
+    embed = embed_base(
+        "📄 TERMOS DE USO | ZYRON SENSI",
+        "Ao utilizar os serviços da Zyron Sensi, você concorda com as seguintes condições:\n\n"
+        "**1. Uso dos serviços:** utilize os produtos e serviços conforme as orientações da equipe.\n"
+        "**2. Compras:** confira as informações do produto antes de concluir uma compra.\n"
+        "**3. Suporte:** dúvidas e problemas devem ser encaminhados por ticket usando `.p`.\n"
+        "**4. Conduta:** fraudes, abusos ou tentativas de prejudicar o servidor não são permitidos.\n"
+        "**5. Atualizações:** estes termos podem ser atualizados quando necessário.\n\n"
+        "Em caso de dúvidas, entre em contato com a equipe.",
+        discord.Color.gold(),
+    )
+
+    await ctx.send(embed=embed)
+
+
+# =====================================================
 # .limpar - MODERAÇÃO
 # =====================================================
 
