@@ -8,7 +8,7 @@ GUILD_ID = os.getenv("GUILD_ID", "").strip()
 SUPPORT_ROLE_ID = os.getenv("SUPPORT_ROLE_ID", "").strip()
 
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=".", intents=intents)
 
 
 def support_role(guild: discord.Guild):
